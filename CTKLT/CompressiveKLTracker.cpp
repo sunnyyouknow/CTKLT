@@ -49,6 +49,7 @@ CompressiveKLTracker::CompressiveKLTracker(int _id)
 CompressiveKLTracker::CompressiveKLTracker(int _id, Rect _box)
 {
 	id = _id;
+	box0 = _box;
 	box1 = _box;
 	box2 = _box;
 
@@ -326,21 +327,22 @@ void CompressiveKLTracker::radioClassifier(vector<float>& _muPos, vector<float>&
 }
 void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 {
+	box0 = _objectBox;
 	box1 = _objectBox;
-	box2 = box1;
+	box2 = _objectBox;
 
 	vp1.reserve(nMaxPoints);
 	vp2.reserve(nMaxPoints);
 
-	//bbPoints(vp1, box1);
-	bbPointsharris(_frame, vp1, box1);
+	bbPoints(vp1, box1);
+	//bbPointsharris(_frame, vp1, box1);
 
 	// compute feature template
 	HaarFeature(box1, featureNum);
 
 	// compute sample templates
-	sampleRect(_frame, box1, rOuterPositive, 0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
-	sampleRect(_frame, box1, rSearchWindow*1.5, rOuterPositive + 4.0, 100, sampleNegativeBox);//在rOutPositive(4)+4-25*1.5（37.5）范围内找最大为100个负样本
+	sampleRect(_frame, box0, rOuterPositive, 0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
+	sampleRect(_frame, box0, rSearchWindow*1.5, rOuterPositive + 4.0, 100, sampleNegativeBox);//在rOutPositive(4)+4-25*1.5（37.5）范围内找最大为100个负样本
 
 	integral(_frame, imageIntegral, CV_32F);
 
@@ -355,8 +357,8 @@ void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 
 void CompressiveKLTracker::processFrame(Mat& _frame)
 {
-	//bbPoints(vp1, box1);
-	bbPointsharris(_frame, vp1, box1);
+	bbPoints(vp1, box1);
+	//bbPointsharris(_frame, vp1, box1);
 
 	status = 0;
 	status = (int)lkt.trackf2f(preGrayFrame, _frame, vp1, vp2);
@@ -375,7 +377,9 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 		box2 = box1;
 	}
 
+
 	 
+
 	//PRINT(scaleRatio);
 
 	//update the features
@@ -386,17 +390,28 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 			for (int k = 0; k < features.at(i).size();k++)
 			{
 				Rect& rec = features.at(i).at(k);
-				float s1 = 0.5*(scaleRatio - 1)*rec.width;
-				float s2 = 0.5*(scaleRatio - 1)*rec.height;
-				
-				//rec.x = (rec.x - s1);
-				//rec.y = (rec.y - s2);
 
-				rec.x *= scaleRatio;
-				rec.y *= scaleRatio;
 
-				rec.width = (rec.width*scaleRatio);
-				rec.height = (rec.height*scaleRatio);
+
+				//rec.x *= scaleRatio;
+				//rec.y *= scaleRatio;
+
+				//rec.width = (rec.width*scaleRatio);
+				//rec.height = (rec.height*scaleRatio);
+
+
+
+				//float s1 = 0.5*(scaleRatio - 1)*box1.width;
+				//float s2 = 0.5*(scaleRatio - 1)*box1.height;
+				//box1.x = (box1.x - s1);
+				//box1.y = (box1.y - s2);
+
+				//box1.x = box1.x;
+				//box1.y = box1.y;
+				//box1.width *= scaleRatio;
+				//box1.height *= scaleRatio;
+
+
 			}
 		}
 	}
@@ -404,24 +419,30 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 	// predict
-	sampleRect(_frame, box2, rSearchWindow, detectBox);
+	sampleRect(_frame, box0, rSearchWindow, detectBox);//box2
 	integral(_frame, imageIntegral, CV_32F);
 	getFeatureValue(imageIntegral, detectBox, detectFeatureValue);
 	int radioMaxIndex;
 	float radioMax;
 	radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, radioMax, radioMaxIndex);
-	box1 = detectBox[radioMaxIndex];//具有最大概率的Box设为objectBox，更新数据
+
+	//PRINT(box1);
+	//PRINT(detectBox[radioMaxIndex]);
+	//PRINT(box2);
+
+	box0 = detectBox[radioMaxIndex];//具有最大概率的Box设为objectBox，更新数据
 
 	// update
-	sampleRect(_frame, box1, rOuterPositive, 0.0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
-	sampleRect(_frame, box1, rSearchWindow*1.5, rOuterPositive + 4.0, 100, sampleNegativeBox);//在rOutPositive(4)+4-25*1.5（37.5）范围内找最大为100个负样本
+	sampleRect(_frame, box0, rOuterPositive, 0.0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
+	sampleRect(_frame, box0, rSearchWindow*1.5, rOuterPositive + 4.0, 100, sampleNegativeBox);//在rOutPositive(4)+4-25*1.5（37.5）范围内找最大为100个负样本
 
 	getFeatureValue(imageIntegral, samplePositiveBox, samplePositiveFeatureValue);
 	getFeatureValue(imageIntegral, sampleNegativeBox, sampleNegativeFeatureValue);
 	classifierUpdate(samplePositiveFeatureValue, muPositive, sigmaPositive, learnRate);
 	classifierUpdate(sampleNegativeFeatureValue, muNegative, sigmaNegative, learnRate);
 
-	box2 = box1;
+	//box2 = box1;
+	box1 = box2;
 	_frame.copyTo(preGrayFrame);
 }
 

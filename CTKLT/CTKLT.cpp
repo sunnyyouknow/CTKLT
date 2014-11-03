@@ -18,6 +18,9 @@
 using namespace cv;
 using namespace std;
 
+extern const Scalar obColors[10] = { Scalar(0, 0, 255), Scalar(255, 0, 255), Scalar(0, 178, 236), Scalar(255, 0, 0), Scalar(255, 165, 0), Scalar(255, 255, 0), Scalar(105, 139, 34), Scalar(255, 20, 147), Scalar(0, 0, 0), Scalar(85, 26, 139) };
+
+
 const string resultPath = "TrackingResult.txt";
 
 //const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\40_100.wmv";
@@ -26,11 +29,11 @@ const string resultPath = "TrackingResult.txt";
 //const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251.wmv";
 //const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251_locations.txt";
 
-const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\kobe.avi";
-const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\location.txt";
+//const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\kobe.avi";
+//const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\location.txt";
 
-//const string videoPath = "D:\\MyData\\sequences\\videos\\test_input_opencv_short.wmv"; //
-//const string locationPath = "D:\\MyData\\sequences\\videos\\locations.txt";
+const string videoPath = "D:\\MyData\\sequences\\videos\\test_input_opencv_short.wmv"; //
+const string locationPath = "D:\\MyData\\sequences\\videos\\locations.txt";
 
 
 bool readLocation(string locationPath, vector<vector<Rect> > &vR);
@@ -81,12 +84,12 @@ int _tmain(int argc, _TCHAR* argv[])
 		vector<CompressiveKLTracker> cts;
 
 
-		while (frameIndex<3160)
-		{
-			cap >> frame;
-			cout << frameIndex << endl;
-			frameIndex++;
-		}
+		//while (frameIndex<3160)
+		//{
+		//	cap >> frame;
+		//	cout << frameIndex << endl;
+		//	frameIndex++;
+		//}
 
 
 		cap >> frame;
@@ -169,7 +172,8 @@ int _tmain(int argc, _TCHAR* argv[])
 					
 					//printf("%.5f second, %.5f fps\n", t / (cvGetTickFrequency()*1000000.), 1 / (t / (cvGetTickFrequency()*1000000.)));
 
-					rectangle(frame, cts.at(i).box2, Scalar(200, 0, 0), 2);// Draw rectangle
+					rectangle(frame, cts.at(i).box0, obColors[2], 2);// Draw rectangle
+					rectangle(frame, cts.at(i).box2, obColors[3], 2);// Draw rectangle
 					outFile << i << ": " << (int)cts.at(i).box2.x << " " << (int)cts.at(i).box2.y << " " << (int)cts.at(i).box2.width << " " << (int)cts.at(i).box2.height << endl;
 				}
 
@@ -185,7 +189,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			video_writer << frame;
 
 
-			if (waitKey(1 * int(!havedrawn)) == 's' || frameIndex == 3177)
+			if (waitKey(1 * int(!havedrawn)) == 's' || frameIndex == 18)//3177
 				//if (waitKey(1) == 's' || frameIndex == 18)
 			{
 				stop = true;

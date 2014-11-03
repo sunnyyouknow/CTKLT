@@ -18,6 +18,8 @@ const int nminPoints = 8;
 const int nMaxPoints = 200;
 const float fminFloat = 1e-8;
 
+extern const Scalar obColors[];
+
 class CompressiveKLTracker
 {
 // constructor and destructor functions 
@@ -69,6 +71,7 @@ public:
 public:
 	int id;
 	int status;//the status of the tracker 0-fail 1-success 2...
+	Rect box0;
 	Rect box1;
 	Rect box2;
 	vector<Point2f> vp1;
