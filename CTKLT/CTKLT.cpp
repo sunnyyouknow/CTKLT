@@ -190,7 +190,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 
 			if (waitKey(1 * int(!havedrawn)) == 's' || frameIndex == 18)//3177
-				//if (waitKey(1) == 's' || frameIndex == 18)
+			//if (waitKey(1) == 's' || frameIndex == 18)
 			{
 				stop = true;
 			}

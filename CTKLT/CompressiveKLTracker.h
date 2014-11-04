@@ -16,7 +16,7 @@ using namespace cv;
 
 const int nminPoints = 8;
 const int nMaxPoints = 200;
-const float fminFloat = 1e-8;
+const float fminFloat = 1;
 
 extern const Scalar obColors[];
 

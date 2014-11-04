@@ -12,7 +12,7 @@ CompressiveKLTracker::CompressiveKLTracker()
 	featureMaxNumRect = 4;	// number of rectangle from 2 to 4
 	featureNum = 50;	// number of all weaker classifiers, i.e,feature pool
 	rOuterPositive = 4;	// radical scope of positive samples
-	rSearchWindow = 25; // size of search window
+	rSearchWindow = 25; // size of search window 25
 	muPositive = vector<float>(featureNum, 0.0f);
 	muNegative = vector<float>(featureNum, 0.0f);
 	sigmaPositive = vector<float>(featureNum, 1.0f);
@@ -188,6 +188,7 @@ Arguments:
 }
 
 
+
 /*
 这个sampleRect的重载函数是用来在上一帧跟踪的目标box的周围（距离小于_srw）采集若干box来待检测。  
 与上面的那个不一样，上面那个是在这一帧已经检测出目标的基础上，采集正负样本来更新分类器的。  
@@ -322,8 +323,7 @@ void CompressiveKLTracker::radioClassifier(vector<float>& _muPos, vector<float>&
 		}
 	}
 
-	PRINT(sumRadio);
-
+	PRINT(_radioMax);
 }
 void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 {
@@ -338,7 +338,7 @@ void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 	//bbPointsharris(_frame, vp1, box1);
 
 	// compute feature template
-	HaarFeature(box1, featureNum);
+	HaarFeature(box0, featureNum);
 
 	// compute sample templates
 	sampleRect(_frame, box0, rOuterPositive, 0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
@@ -357,16 +357,14 @@ void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 
 void CompressiveKLTracker::processFrame(Mat& _frame)
 {
-	bbPoints(vp1, box1);
-	//bbPointsharris(_frame, vp1, box1);
 
 	status = 0;
 	status = (int)lkt.trackf2f(preGrayFrame, _frame, vp1, vp2);
 	if (1 == status)
 	{
-		scaleRatio=bbPredict(vp1, vp2, box1, box2);
+		scaleRatio = bbPredict(vp1, vp2, box1, box2);
 		cout << "FB Error: " << lkt.getFB() << endl;
-		if (lkt.getFB() > 10 || box2.x > _frame.cols || box2.y > _frame.rows || box2.br().x < 10 || box2.br().y < 10)// origin: br().x<1
+		if (lkt.getFB() > 3 || box2.x > _frame.cols || box2.y > _frame.rows || box2.br().x < 10 || box2.br().y < 10)// origin: 10 br().x<1
 		{
 			status = 0;
 			cout << "KLT Tracker Failed: FB Error " << lkt.getFB() << " ,box2: " << box2 << endl;
@@ -378,43 +376,59 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 	}
 
 
-	 
 
-	//PRINT(scaleRatio);
 
-	//update the features
-	if (scaleRatio - 1.0>fminFloat || scaleRatio - 1.0 < -fminFloat)// 与1不等
+	PRINT(scaleRatio);
+
+	////update the features
+	//if (status==1&&(scaleRatio - 1.0>fminFloat || scaleRatio - 1.0 < -fminFloat))// 与1不等
+	//{
+	//	for (int i = 0; i < featureNum; i++)
+	//	{
+	//		for (int k = 0; k < features.at(i).size();k++)
+	//		{
+	//			Rect& rec = features.at(i).at(k);
+
+	//			rec.x = (rec.x*scaleRatio);
+	//			rec.y = (rec.y*scaleRatio);
+
+	//			rec.width = (rec.width*scaleRatio);
+	//			rec.height = (rec.height*scaleRatio);
+
+
+	//		}
+	//	}
+	//	box0 = box2;
+	//}
+	//else
+	//{
+	//	box0 = box1;
+	//}
+
+
+	float sca = 1.0;
+	sca = float(box2.width) / float(box0.width);
+	if (status == 1 && ((sca - 1.0) > fminFloat || (sca - 1.0) < -fminFloat))
 	{
 		for (int i = 0; i < featureNum; i++)
 		{
-			for (int k = 0; k < features.at(i).size();k++)
+			for (int k = 0; k < features.at(i).size(); k++)
 			{
 				Rect& rec = features.at(i).at(k);
 
+				rec.x = (rec.x*sca);
+				rec.y = (rec.y*sca);
 
-
-				//rec.x *= scaleRatio;
-				//rec.y *= scaleRatio;
-
-				//rec.width = (rec.width*scaleRatio);
-				//rec.height = (rec.height*scaleRatio);
-
-
-
-				//float s1 = 0.5*(scaleRatio - 1)*box1.width;
-				//float s2 = 0.5*(scaleRatio - 1)*box1.height;
-				//box1.x = (box1.x - s1);
-				//box1.y = (box1.y - s2);
-
-				//box1.x = box1.x;
-				//box1.y = box1.y;
-				//box1.width *= scaleRatio;
-				//box1.height *= scaleRatio;
+				rec.width = (rec.width*sca);
+				rec.height = (rec.height*sca);
 
 
 			}
 		}
+		box0 = box2;
 	}
+
+
 
 
 
@@ -432,6 +446,72 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 
 	box0 = detectBox[radioMaxIndex];//具有最大概率的Box设为objectBox，更新数据
 
+	//update
+
+
+
+
+	static int ctFailCount = 0;
+	if (radioMax < 0)
+	{
+		ctFailCount++;
+	}
+	else
+	{
+		ctFailCount = 0;
+	}
+
+
+	bool ctFail = false;
+	if (ctFailCount>2)//3
+	{
+		ctFail = true;
+		ctFailCount = 0;
+	}
+
+
+
+	if (status == 0&&!ctFail)
+	{
+		box1 = box0;
+		box2 = box0;
+	}
+	else if (status==1&&ctFail)
+	{
+		float sca = 1.0;
+		sca = float(box2.width) / float(box0.width);
+
+		for (int i = 0; i < featureNum; i++)
+		{
+			for (int k = 0; k < features.at(i).size(); k++)
+			{
+				Rect& rec = features.at(i).at(k);
+
+				rec.x = (rec.x*sca);
+				rec.y = (rec.y*sca);
+
+				rec.width = (rec.width*sca);
+				rec.height = (rec.height*sca);
+
+
+			}
+		}
+
+		box0 = box2;
+		box1 = box2;
+
+	}
+	else if (status==0&&ctFail)
+	{
+		cout << "-----------------------Need Init----------------------" << endl;
+	}
+	else
+	{
+		box1 = box2;
+	}
+
+
+
 	// update
 	sampleRect(_frame, box0, rOuterPositive, 0.0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
 	sampleRect(_frame, box0, rSearchWindow*1.5, rOuterPositive + 4.0, 100, sampleNegativeBox);//在rOutPositive(4)+4-25*1.5（37.5）范围内找最大为100个负样本
@@ -441,8 +521,11 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 	classifierUpdate(samplePositiveFeatureValue, muPositive, sigmaPositive, learnRate);
 	classifierUpdate(sampleNegativeFeatureValue, muNegative, sigmaNegative, learnRate);
 
-	//box2 = box1;
-	box1 = box2;
+
+
+	bbPoints(vp1, box1);
+	//bbPointsharris(_frame, vp1, box1);
+
 	_frame.copyTo(preGrayFrame);
 }
 
@@ -509,11 +592,12 @@ float CompressiveKLTracker::bbPredict(const std::vector<cv::Point2f>& points1, c
 {
 	int npoints = (int)points1.size();
 
-	if (npoints < nminPoints) // if the number of points less than nminPoints, we assume the prediction is inaccuracy and do not update the size of box 
-	{
-		bb2 = bb1;
-		return 1.0;
-	}
+	
+	//if (npoints < nminPoints) // if the number of points less than nminPoints, we assume the prediction is inaccuracy and do not update the size of box 
+	//{
+	//	bb2 = bb1;
+	//	return 1.0;
+	//}
 
 
 	std::vector<float> xoff(npoints);
