@@ -174,6 +174,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 					rectangle(frame, cts.at(i).box0, obColors[2], 2);// Draw rectangle
 					rectangle(frame, cts.at(i).box2, obColors[3], 2);// Draw rectangle
+					//rectangle(frame, cts.at(i).box, obColors[4], 2);// Draw rectangle
 					outFile << i << ": " << (int)cts.at(i).box2.x << " " << (int)cts.at(i).box2.y << " " << (int)cts.at(i).box2.width << " " << (int)cts.at(i).box2.height << endl;
 				}
 

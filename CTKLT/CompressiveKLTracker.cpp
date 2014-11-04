@@ -52,8 +52,7 @@ CompressiveKLTracker::CompressiveKLTracker(int _id, Rect _box)
 	box0 = _box;
 	box1 = _box;
 	box2 = _box;
-
-	id = _id;
+	box = _box;
 
 	featureMinNumRect = 2;
 	featureMaxNumRect = 4;	// number of rectangle from 2 to 4
@@ -325,11 +324,14 @@ void CompressiveKLTracker::radioClassifier(vector<float>& _muPos, vector<float>&
 
 	PRINT(_radioMax);
 }
+
+
 void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 {
 	box0 = _objectBox;
 	box1 = _objectBox;
 	box2 = _objectBox;
+	box = _objectBox;
 
 	vp1.reserve(nMaxPoints);
 	vp2.reserve(nMaxPoints);
@@ -364,21 +366,31 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 	{
 		scaleRatio = bbPredict(vp1, vp2, box1, box2);
 		cout << "FB Error: " << lkt.getFB() << endl;
-		if (lkt.getFB() > 3 || box2.x > _frame.cols || box2.y > _frame.rows || box2.br().x < 10 || box2.br().y < 10)// origin: 10 br().x<1
+		if (lkt.getFB() > 10 || box2.x > _frame.cols || box2.y > _frame.rows || box2.br().x < 10 || box2.br().y < 10)// origin: 10 br().x<1
 		{
 			status = 0;
 			cout << "KLT Tracker Failed: FB Error " << lkt.getFB() << " ,box2: " << box2 << endl;
 		}
 	}
-	else
+
+
+	if (status==0)
 	{
 		box2 = box1;
 	}
 
 
 
+	box.width = (1 - fupdateRatio)*box.width + fupdateRatio*box2.width;
+	box.height = (1 - fupdateRatio)*box.height + fupdateRatio*box2.height;
 
-	PRINT(scaleRatio);
+	float s1 = 0.5*(box.width-box2.width);
+	float s2 = 0.5*(box.height-box2.height);
+	box.x = round(box2.x - s1);
+	box.y = round(box2.y - s2);
+
+
+	//PRINT(scaleRatio);
 
 	////update the features
 	//if (status==1&&(scaleRatio - 1.0>fminFloat || scaleRatio - 1.0 < -fminFloat))// 与1不等
@@ -407,8 +419,8 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 	float sca = 1.0;
-	sca = float(box2.width) / float(box0.width);
-	if (status == 1 && ((sca - 1.0) > fminFloat || (sca - 1.0) < -fminFloat))
+	sca = float(box.width) / float(box0.width);
+	if (status == 1)// && ((sca - 1.0) > fminFloat || (sca - 1.0) < -fminFloat))
 	{
 		for (int i = 0; i < featureNum; i++)
 		{
@@ -425,12 +437,21 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 
 			}
 		}
-		box0 = box2;
+
+		//box0 = box2;
+
+		//float s1 = 0.5*(sca - 1)*box0.width;
+		//float s2 = 0.5*(sca - 1)*box0.height;
+		//box0.x = round(box0.x - s1);
+		//box0.y = round(box0.y - s2);
+		//box0.width = round(box0.width*sca);
+		//box0.height = round(box0.height*sca);
+
+		box0 = box;
+		//rSearchWindow *= sca;
 	}
 
-
-
-
+	
 
 	// predict
 	sampleRect(_frame, box0, rSearchWindow, detectBox);//box2
@@ -439,77 +460,85 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 	int radioMaxIndex;
 	float radioMax;
 	radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, radioMax, radioMaxIndex);
-
 	//PRINT(box1);
 	//PRINT(detectBox[radioMaxIndex]);
 	//PRINT(box2);
-
 	box0 = detectBox[radioMaxIndex];//具有最大概率的Box设为objectBox，更新数据
+
+
 
 	//update
 
+	//vector<Rect> cBox;
+	//cBox.push_back(box0);
+	//getFeatureValue(imageIntegral, cBox, detectFeatureValue);
+	//int radioMaxIndex;
+	//float radioMax;
+	//radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, radioMax, radioMaxIndex);
 
 
 
-	static int ctFailCount = 0;
-	if (radioMax < 0)
-	{
-		ctFailCount++;
-	}
-	else
-	{
-		ctFailCount = 0;
-	}
+
+	//static int ctFailCount = 0;
+	//if (radioMax < 0)
+	//{
+	//	ctFailCount++;
+	//}
+	//else
+	//{
+	//	ctFailCount = 0;
+	//}
 
 
-	bool ctFail = false;
-	if (ctFailCount>2)//3
-	{
-		ctFail = true;
-		ctFailCount = 0;
-	}
+	//bool ctFail = false;
+	//if (ctFailCount>2)//3
+	//{
+	//	ctFail = true;
+	//	ctFailCount = 0;
+	//}
 
 
+	//if (status == 0&&!ctFail)
+	//{
+	//	box1 = box0;
+	//	box2 = box0;
+	//}
+	//else if (status==1&&ctFail)
+	//{
+	//	float sca = 1.0;
+	//	sca = float(box2.width) / float(box0.width);
 
-	if (status == 0&&!ctFail)
-	{
-		box1 = box0;
-		box2 = box0;
-	}
-	else if (status==1&&ctFail)
-	{
-		float sca = 1.0;
-		sca = float(box2.width) / float(box0.width);
+	//	for (int i = 0; i < featureNum; i++)
+	//	{
+	//		for (int k = 0; k < features.at(i).size(); k++)
+	//		{
+	//			Rect& rec = features.at(i).at(k);
 
-		for (int i = 0; i < featureNum; i++)
-		{
-			for (int k = 0; k < features.at(i).size(); k++)
-			{
-				Rect& rec = features.at(i).at(k);
+	//			rec.x = (rec.x*sca);
+	//			rec.y = (rec.y*sca);
 
-				rec.x = (rec.x*sca);
-				rec.y = (rec.y*sca);
-
-				rec.width = (rec.width*sca);
-				rec.height = (rec.height*sca);
+	//			rec.width = (rec.width*sca);
+	//			rec.height = (rec.height*sca);
 
 
-			}
-		}
+	//		}
+	//	}
 
-		box0 = box2;
-		box1 = box2;
+	//	box0 = box2;
+	//	box1 = box2;
 
-	}
-	else if (status==0&&ctFail)
-	{
-		cout << "-----------------------Need Init----------------------" << endl;
-	}
-	else
-	{
-		box1 = box2;
-	}
+	//}
+	//else if (status==0&&ctFail)
+	//{
+	//	cout << "-----------------------Need Init----------------------" << endl;
+	//}
+	//else
+	//{
+	//	box1 = box2;
+	//}
 
+
+	box1 = box2;
 
 
 	// update
@@ -627,13 +656,17 @@ float CompressiveKLTracker::bbPredict(const std::vector<cv::Point2f>& points1, c
 	else {
 		s = 1.0;
 	}
+
 	float s1 = 0.5*(s - 1)*bb1.width;
 	float s2 = 0.5*(s - 1)*bb1.height;
+
 	//printf("s= %f s1= %f s2= %f \n", s, s1, s2);
 	bb2.x = round(bb1.x + dx - s1);
 	bb2.y = round(bb1.y + dy - s2);
+
 	bb2.width = round(bb1.width*s);
 	bb2.height = round(bb1.height*s);
+
 	//printf("predicted bb: %d %d %d %d\n", bb2.x, bb2.y, bb2.br().x, bb2.br().y);
 
 	return s;
