@@ -16,7 +16,7 @@ using namespace cv;
 
 const int nminPoints = 8;
 const int nMaxPoints = 200;
-const float fminFloat = 0.1;
+const float fminFloat = 0.01;//
 const float fupdateRatio = 0.1;
 
 extern const Scalar obColors[];
@@ -36,7 +36,7 @@ private:
 	int featureMinNumRect;
 	int featureMaxNumRect;
 	int featureNum;
-	vector<vector<Rect>> features;
+	vector<vector<Rect_<float>>> features;
 	vector<vector<float>> featuresWeight;
 	int rOuterPositive;
 	vector<Rect> samplePositiveBox;
@@ -53,6 +53,8 @@ private:
 	vector<Rect> detectBox;
 	Mat detectFeatureValue;
 	RNG rng;
+public:
+	int ctstatus; // the status of the tracker 0 - fail 1 - success 2...
 
 // functions for CT
 private:
@@ -63,15 +65,12 @@ private:
 	void classifierUpdate(Mat& _sampleFeatureValue, vector<float>& _mu, vector<float>& _sigma, float _learnRate);
 	void radioClassifier(vector<float>& _muPos, vector<float>& _sigmaPos, vector<float>& _muNeg, vector<float>& _sigmaNeg,
 		Mat& _sampleFeatureValue, float& _radioMax, int& _radioMaxIndex);
-public:
-	void processFrame(Mat& _frame);
-	void init(Mat& _frame, Rect _objectBox);
 
 
 // variables for KLT
 public:
 	int id;
-	int status;//the status of the tracker 0-fail 1-success 2...
+	int kltstatus;// the status of the tracker 0-fail 1-success 2...
 	Rect box0;
 	Rect box1;
 	Rect box2;
@@ -93,4 +92,14 @@ private:
 	float scaleRatio;
 public:
 	Rect box;
+	void processFrame(Mat& _frame);
+	void init(Mat& _frame, Rect _objectBox);
+
+// for SFCT
+private:
+	int rFineSearchWindow;
+	void sampleRectDet(Mat& _image, Rect& _objectBox, float _rInner, int _step, vector<Rect>& _sampleBox);
+
+	void setFeatures(float s);
+	void resetFeatures(float s);
 };

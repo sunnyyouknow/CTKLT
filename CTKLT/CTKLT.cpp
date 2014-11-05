@@ -26,14 +26,14 @@ const string resultPath = "TrackingResult.txt";
 //const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\40_100.wmv";
 //const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\40_100_locations.txt";
 
-//const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251.wmv";
-//const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251_locations.txt";
+const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251.wmv";
+const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251_locations.txt";
 
 //const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\kobe.avi";
 //const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\location.txt";
 
-const string videoPath = "D:\\MyData\\sequences\\videos\\test_input_opencv_short.wmv"; //
-const string locationPath = "D:\\MyData\\sequences\\videos\\locations.txt";
+//const string videoPath = "D:\\MyData\\sequences\\videos\\test_input_opencv_short.wmv"; //
+//const string locationPath = "D:\\MyData\\sequences\\videos\\locations.txt";
 
 
 bool readLocation(string locationPath, vector<vector<Rect> > &vR);
