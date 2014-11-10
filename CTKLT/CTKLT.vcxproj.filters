@@ -33,6 +33,9 @@
     <ClInclude Include="LKTracker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="FaceTracker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -48,6 +51,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CompressiveKLTracker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FaceTracker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

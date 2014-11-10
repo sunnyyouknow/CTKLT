@@ -4,8 +4,16 @@
 using namespace cv;
 using namespace std;
 
-#define PRINT(x) cout<<(#x)<<": "<<(x)<<endl;;
-//#define FCT 1 //USE FCT OR CT
+#define PRINT(x) cout<<(#x)<<": "<<(x)<<endl;
+
+#define FCT 1 //USE FCT OR CT
+
+//#define KLTCLASSIFY
+
+//#define USE_HARRIS 1
+
+
+
 
 CompressiveKLTracker::CompressiveKLTracker()
 {
@@ -21,6 +29,7 @@ CompressiveKLTracker::CompressiveKLTracker()
 	learnRate = 0.85f;	// Learning rate parameter
 	kltstatus = 0;
 	ctstatus = 0;
+	status = 0;
 	scaleRatio = 1.0;
 	rFineSearchWindow = 10;
 }
@@ -42,6 +51,7 @@ CompressiveKLTracker::CompressiveKLTracker(int _id)
 	learnRate = 0.85f;	// Learning rate parameter
 	kltstatus = 0;
 	ctstatus = 0;
+	status = 0;
 	scaleRatio = 1.0;
 	rFineSearchWindow = 10;
 }
@@ -67,6 +77,7 @@ CompressiveKLTracker::CompressiveKLTracker(int _id, Rect _box)
 	learnRate = 0.85f;	// Learning rate parameter
 	kltstatus = 0;
 	ctstatus = 0;
+	status = 0;
 	scaleRatio = 1.0;
 	rFineSearchWindow = 10;
 }
@@ -260,10 +271,19 @@ void CompressiveKLTracker::getFeatureValue(Mat& _imageIntegral, vector<Rect>& _s
 			tempValue = 0.0f;
 			for (size_t k = 0; k<features[i].size(); k++)
 			{
-				xMin = _sampleBox[j].x + features[i][k].x;
-				xMax = _sampleBox[j].x + features[i][k].x + features[i][k].width;
-				yMin = _sampleBox[j].y + features[i][k].y;
-				yMax = _sampleBox[j].y + features[i][k].y + features[i][k].height;
+				xMin = _sampleBox[j].x + cvFloor(features[i][k].x);
+				xMax = _sampleBox[j].x + cvFloor(features[i][k].x) + cvFloor(features[i][k].width);
+				yMin = _sampleBox[j].y + cvFloor(features[i][k].y);
+				yMax = _sampleBox[j].y + cvFloor(features[i][k].y) + cvFloor(features[i][k].height);
+
+			
+				xMin = xMin>0 ? xMin : 0;
+				yMin = yMin>0 ? yMin : 0;
+				xMax = xMax < (_imageIntegral.cols-1) ?  xMax : (_imageIntegral.cols-1);
+				yMax = yMax < (_imageIntegral.rows-1) ? yMax : (_imageIntegral.rows-1);
+
+				
+
 				tempValue += featuresWeight[i][k] *
 					(_imageIntegral.at<float>(yMin, xMin) +
 					_imageIntegral.at<float>(yMax, xMax) -
@@ -338,8 +358,11 @@ void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 	vp1.reserve(nMaxPoints);
 	vp2.reserve(nMaxPoints);
 
+#ifndef USE_HARRIS
 	bbPoints(vp1, box1);
-	//bbPointsharris(_frame, vp1, box1);
+#else 
+	bbPointsharris(_frame, vp1, box1);
+#endif
 
 	// compute feature template
 	HaarFeature(box0, featureNum);
@@ -363,48 +386,61 @@ void CompressiveKLTracker::init(Mat& _frame, Rect _objectBox)
 }
 
 
-void CompressiveKLTracker::processFrame(Mat& _frame)
+
+
+#ifndef KLTCLASSIFY
+int CompressiveKLTracker::processFrame(Mat& _frame)
 {
 	//---------------------------------------------------- KLT Tracking------------------------------------------------------
 
-	kltstatus = 0;
+	kltstatus = -1;
 	kltstatus = (int)lkt.trackf2f(preGrayFrame, _frame, vp1, vp2);
 	if (1 == kltstatus)
 	{
 		scaleRatio = bbPredict(vp1, vp2, box1, box2);
 		cout << "FB Error: " << lkt.getFB() << endl;
-		if (lkt.getFB() > 10 || box2.x > _frame.cols || box2.y > _frame.rows || box2.br().x < 10 || box2.br().y < 10)// origin: 10 br().x<1
+		if (lkt.getFB() > 5 || (box2.x) > (_frame.cols - 1) || (box2.y) > (_frame.rows - 1) || box2.x<0 || box2.y<0 || box2.width<20 || box2.height<20 || box2.br().x < 1 || box2.br().y < 1)// origin: 10 br().x<1		{
 		{
-			kltstatus = 0;
+			kltstatus = -1;
 			cout << "KLT Tracker Failed: FB Error " << lkt.getFB() << " ,box2: " << box2 << endl;
 		}
+
 	}
 
 
-	if (kltstatus==0)
+	if (kltstatus==-1)
 	{
 		box2 = box1;
 	}
 
 
 	//-----------------------------------------------Classify the result of KLT----------------------------------------------
-	float kltsca = 1.0;
-	kltsca=float(box0.width) / float(box.width);
+	float kltradioMax=1;
+
+	if (box.x + box.width > (_frame.cols-1) || box.y + box.height > (_frame.rows-1)) // 
+	{
+		kltradioMax = 1;//
+	}
+	else
+	{
+		float kltsca = 1.0;
+		kltsca = float(box.width) / float(box0.width);
+
+		setFeatures(kltsca);
+
+		vector<Rect> kltBox;
+		kltBox.push_back(box);
+		cout << box << endl;
+		getFeatureValue(imageIntegral, kltBox, detectFeatureValue);
+		int kltradioMaxIndex;
+		radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, kltradioMax, kltradioMaxIndex);
+
+		PRINT(kltradioMax);
+
+		//恢复hairr
+		resetFeatures(kltsca);
+	}
 	
-	setFeatures(kltsca);
-
-	vector<Rect> kltBox;
-	kltBox.push_back(box);
-	getFeatureValue(imageIntegral, kltBox, detectFeatureValue);
-	int kltradioMaxIndex;
-	float kltradioMax;
-	radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, kltradioMax, kltradioMaxIndex);
-
-	PRINT(kltradioMax);
-
-	//恢复hairr
-	resetFeatures(kltsca);
-
 
 
 
@@ -467,19 +503,9 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 
-	//----------------------------------------------Judge the tracking results and update-----------------------------------
+	////----------------------------------------------Judge the tracking results and update-----------------------------------
 
-	//if (kltradioMax < -200)
-	//{
-	//	kltstatus = 0;
-	//}
-	//	
-	//
-	//ctstatus = 1;
-	//if (radioMax < -200)
-	//{
-	//	ctstatus = 0;
-	//}
+
 
 
 	static int kltFailCount = 0;
@@ -491,18 +517,18 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 	{
 		kltFailCount = 0;
 	}
-
-	if (kltFailCount>10)
+	if (kltFailCount>0)
 	{
-		kltstatus = 0;
+		kltstatus = (kltstatus == -1) ? -1 : 0;
 		kltFailCount = 0;
 	}
+
 
 
 	ctstatus = 1;
 
 	static int ctFailCount = 0;
-	if (radioMax < 0)
+	if (radioMax < failedThreshold)
 	{
 		ctFailCount++;
 	}
@@ -510,7 +536,7 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 	{
 		ctFailCount = 0;
 	}
-	if (ctFailCount>0)//3
+	if (ctFailCount>0)
 	{
 		ctstatus = 0;
 		ctFailCount = 0;
@@ -518,22 +544,30 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 
+	if (kltstatus<0||kltradioMax<-200)
+	{
+		return 0;
+	}
+
+
+
+	static int ctFrameCount = 0;
 	if (kltstatus == 0&&ctstatus==1)
 	{
 		cout << "-----------------------Update KLT----------------------" << endl;
+
+
 		box1 = box0;
 		box2 = box0;
 	}
-	else if (kltstatus==1&&ctstatus==0)
+	else if (kltstatus==1&&ctstatus==0&&ctFailCount>1)
 	{
 		cout << "-----------------------Update CT----------------------" << endl;
 		float sca = 1.0;
-		sca = float(box2.width) / float(box0.width);
+		sca = float(box.width) / float(box0.width);
 		
 		setFeatures(sca);
 
-		//box0 = box2;
-		//box1 = box2;
 
 		float s1 = 0.5*(sca - 1)*box0.width;
 		float s2 = 0.5*(sca - 1)*box0.height;
@@ -542,23 +576,47 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 		box0.width = round(box0.width*sca);
 		box0.height = round(box0.height*sca);
 
-		box1 = box2;
 
+		ctstatus = 0;
+		ctstatus = processFrame_ct(_frame);
+		if (!status)
+		{
+			box0 = box2;
+			for (int i = 0; i < featureNum; i++)
+			{
+				muPositive.at(i) = 0.0f;
+				muNegative.at(i) = 0.0f;
+				sigmaPositive.at(i) = 1.0f;
+				sigmaNegative.at(i) = 1.0f;
+			}
+			init(_frame, box0);
+		}
+
+		
+		box1 = box2;
 	}
-	else if (kltstatus==0&&ctstatus==0)
+	else if (kltstatus<=0&&ctstatus==0)
 	{
 		cout << "-----------------------Need Init----------------------" << endl;
+		return 0;
 	}
 	else
 	{
+		cout << "----------------------Track Success--------------------" << endl;
 		box1 = box2;
 	}
+
+
+    ctFrameCount++;
+
 
 
 	//box1 = box2;
 
 
 	//------------------------------------------------ Sampling and Update CT and KLT-------------------------------------------
+
+
 
 #ifndef FCT
 	sampleRect(_frame, box0, rOuterPositive, 0.0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
@@ -579,9 +637,132 @@ void CompressiveKLTracker::processFrame(Mat& _frame)
 	//bbPointsharris(_frame, vp1, box1);
 
 	_frame.copyTo(preGrayFrame);
+
+
+	return 1;
 }
 
+#else
 
+int CompressiveKLTracker::processFrame(Mat& _frame)
+{
+	//---------------------------------------------------- KLT Tracking------------------------------------------------------
+
+	kltstatus = -1;
+	kltstatus = (int)lkt.trackf2f(preGrayFrame, _frame, vp1, vp2);
+	if (1 == kltstatus)
+	{
+		scaleRatio = bbPredict(vp1, vp2, box1, box2);
+		cout << "FB Error: " << lkt.getFB() << endl;
+		if (lkt.getFB() > 10 || (box2.x) > (_frame.cols - 1) || (box2.y) > (_frame.rows - 1) || box2.x<0 || box2.y<0 ||box2.width<20||box2.height<20|| box2.br().x < 1 || box2.br().y < 1)// origin: 10 br().x<1
+		{
+			kltstatus = -1;
+			cout << "KLT Tracker Failed: FB Error " << lkt.getFB() << " ,box2: " << box2 << endl;
+		}
+
+	}
+
+
+	if (kltstatus == -1)
+	{
+		box2 = box1;
+	}
+
+
+	float kltsca = 1.0;
+
+	//-----------------------------------------------Classify the result of KLT----------------------------------------------
+	
+	box = box2;
+
+
+	float kltradioMax = 1;
+
+	if (box.x + box.width > (_frame.cols - 1) || box.y + box.height > (_frame.rows - 1)) // 
+	{
+		kltradioMax = 1;//
+	}
+	else
+	{
+		kltsca = float(box.width) / float(box0.width);
+
+		setFeatures(kltsca);
+
+		vector<Rect> kltBox;
+		kltBox.push_back(box);
+		
+		getFeatureValue(imageIntegral, kltBox, detectFeatureValue);
+		int kltradioMaxIndex;
+		radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, kltradioMax, kltradioMaxIndex);
+
+		PRINT(kltradioMax);
+
+		//恢复hairr
+		resetFeatures(kltsca);
+	}
+
+
+
+
+	////------------------------------------------------- Updating the box and box0----------------------------------------------
+
+	//box.width = (1 - fupdateRatio)*box.width + fupdateRatio*box2.width;
+	//box.height = (1 - fupdateRatio)*box.height + fupdateRatio*box2.height;
+	//float s1 = 0.5*(box.width - box2.width);
+	//float s2 = 0.5*(box.height - box2.height);
+	//box.x = round(box2.x - s1);
+	//box.y = round(box2.y - s2);
+
+
+	if (kltstatus <=0||kltradioMax < -200)
+	{
+		status = 0;
+		return 0;
+	}
+
+
+	//------------------------------------------------ Sampling and Update CT and KLT-------------------------------------------
+
+	if (kltradioMax>-200 && ((box.x + box.width) <= (_frame.cols - 1)) && ((box.y + box.height) <= (_frame.rows - 1)))
+	{
+
+#ifndef FCT
+		sampleRect(_frame, box, rOuterPositive, 0.0, 1000000, samplePositiveBox);//0-rOuterPositive(4)范围内采样最大为1000000个正样本
+		sampleRect(_frame, box, rSearchWindow*1.5, rOuterPositive + 4.0, 50, sampleNegativeBox);//在rOutPositive(4)+4-25*1.5（37.5）范围内找最大为100个负样本
+#else
+		sampleRectDet(_frame, box, rOuterPositive, 1, samplePositiveBox);
+		sampleRect(_frame, box, rSearchWindow*1.5, rOuterPositive + 4.0, 50, sampleNegativeBox);
+#endif
+
+
+		kltsca = float(box.width) / float(box0.width);
+
+		setFeatures(kltsca);
+
+		getFeatureValue(imageIntegral, samplePositiveBox, samplePositiveFeatureValue);
+		getFeatureValue(imageIntegral, sampleNegativeBox, sampleNegativeFeatureValue);
+		classifierUpdate(samplePositiveFeatureValue, muPositive, sigmaPositive, learnRate);
+		classifierUpdate(sampleNegativeFeatureValue, muNegative, sigmaNegative, learnRate);
+
+		resetFeatures(kltsca);
+	}
+
+
+	box1 = box;
+
+#ifndef USE_HARRIS
+	bbPoints(vp1, box1);
+#else 
+	bbPointsharris(_frame, vp1, box1);
+#endif
+
+	_frame.copyTo(preGrayFrame);
+
+
+	return 1;
+}
+
+#endif
 
 
 
@@ -745,6 +926,7 @@ float CompressiveKLTracker::bbPredict(const std::vector<cv::Point2f>& points1, c
 	bb2.width = round(bb1.width*s);
 	bb2.height = round(bb1.height*s);
 
+
 	//printf("predicted bb: %d %d %d %d\n", bb2.x, bb2.y, bb2.br().x, bb2.br().y);
 
 	return s;
@@ -789,4 +971,181 @@ void CompressiveKLTracker::resetFeatures(float s)
 			featuresWeight.at(i).at(k) *= (s*s);
 		}
 	}
+}
+
+
+
+
+int CompressiveKLTracker::processFrame_ct(Mat& _frame)
+{
+#ifndef FCT
+	sampleRect(_frame, box0, rSearchWindow, detectBox);
+	integral(_frame, imageIntegral, CV_32F);
+	getFeatureValue(imageIntegral, detectBox, detectFeatureValue);
+	int radioMaxIndex;
+	float radioMax;
+	radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, radioMax, radioMaxIndex);
+	box0 = detectBox[radioMaxIndex];
+
+	PRINT(radioMax);
+
+	if (radioMax < failedThreshold)
+	{
+		return 0;
+	}
+
+	// update
+	sampleRect(_frame, box0, rOuterPositive, 0.0, 1000000, samplePositiveBox);
+	sampleRect(_frame, box0, rSearchWindow*1.5, rOuterPositive + 4.0, 50, sampleNegativeBox);
+
+	getFeatureValue(imageIntegral, samplePositiveBox, samplePositiveFeatureValue);
+	getFeatureValue(imageIntegral, sampleNegativeBox, sampleNegativeFeatureValue);
+	classifierUpdate(samplePositiveFeatureValue, muPositive, sigmaPositive, learnRate);
+	classifierUpdate(sampleNegativeFeatureValue, muNegative, sigmaNegative, learnRate);
+
+	return 1;
+#else
+	integral(_frame, imageIntegral, CV_32F);
+	int radioMaxIndex;
+	float radioMax;
+
+	// predict
+	sampleRectDet(_frame, box0, rSearchWindow, 4, detectBox);
+	getFeatureValue(imageIntegral, detectBox, detectFeatureValue);
+	radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, radioMax, radioMaxIndex);
+	box0 = detectBox[radioMaxIndex];
+
+	sampleRectDet(_frame, box0, rFineSearchWindow, 1, detectBox);
+	getFeatureValue(imageIntegral, detectBox, detectFeatureValue);
+	radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, radioMax, radioMaxIndex);
+	box0 = detectBox[radioMaxIndex];
+
+	PRINT(radioMax);
+
+	if (radioMax < failedThreshold)
+	{
+		return 0;
+	}
+
+	// update
+	sampleRectDet(_frame, box0, rOuterPositive, 1, samplePositiveBox);
+	sampleRect(_frame, box0, rSearchWindow*1.5, rOuterPositive + 4.0, 50, sampleNegativeBox);
+
+
+	getFeatureValue(imageIntegral, samplePositiveBox, samplePositiveFeatureValue);
+	getFeatureValue(imageIntegral, sampleNegativeBox, sampleNegativeFeatureValue);
+	classifierUpdate(samplePositiveFeatureValue, muPositive, sigmaPositive, learnRate);
+	classifierUpdate(sampleNegativeFeatureValue, muNegative, sigmaNegative, learnRate);
+
+	return 1;
+#endif
+}
+
+
+#ifndef KLTCLASSIFY
+void CompressiveKLTracker::updateTracker(Mat& _frame, Rect _box)
+{
+	box1 = _box;
+	box2 = _box;
+	
+
+	//Method 1 
+	float scalRatio = float(_box.width) / float(box0.width);
+	setFeatures(scalRatio);
+
+
+	float s1 = 0.5*(scalRatio - 1)*box0.width;
+	float s2 = 0.5*(scalRatio - 1)*box0.height;
+	box0.x = round(box0.x - s1);
+	box0.y = round(box0.y - s2);
+	box0.width = round(box0.width*scalRatio);
+	box0.height = round(box0.height*scalRatio);
+
+
+	status = 0;
+	status = processFrame_ct(_frame);
+
+	if (!status)
+	{
+		box0 = _box;
+		for (int i = 0; i < featureNum; i++)
+		{
+			muPositive.at(i) = 0.0f;
+			muNegative.at(i) = 0.0f;
+			sigmaPositive.at(i) = 1.0f;
+			sigmaNegative.at(i) = 1.0f;
+		}
+		init(_frame, box0);
+	}
+
+
+
+
+	//// Method 2 reinit all 
+	//box0 = _box;
+	//for (int i = 0; i < featureNum; i++)
+	//{
+	//	muPositive.at(i) = 0.0f;
+	//	muNegative.at(i) = 0.0f;
+	//	sigmaPositive.at(i) = 1.0f;
+	//	sigmaNegative.at(i) = 1.0f;
+	//}
+
+	//init_fct(_frame, box0);
+
+
+	// Method 3 done nothing
+
+
+}
+
+#else
+
+void CompressiveKLTracker::updateTracker(Mat& _frame, Rect _box)
+{
+	box1 = _box;
+	box2 = _box;
+
+
+	////Method 1 
+	//float scalRatio = float(_box.width) / float(box.width);
+	//setFeatures(scalRatio);
+
+
+	//float s1 = 0.5*(scalRatio - 1)*box0.width;
+	//float s2 = 0.5*(scalRatio - 1)*box0.height;
+	//box.x = round(box0.x - s1);
+	//box.y = round(box0.y - s2);
+	//box.width = round(box0.width*scalRatio);
+	//box.height = round(box0.height*scalRatio);
+
+
+	box = _box;
+	bbPoints(vp1, box);
+}
+
+#endif
+
+
+
+float CompressiveKLTracker::classifyRect(Rect _rec)
+{
+	float scalRatio = float(_rec.width) / float(box0.width);
+
+	setFeatures(scalRatio);
+
+	vector<Rect> kltBox;
+	kltBox.push_back(_rec);
+
+	float kltradioMax=1.0;
+
+	getFeatureValue(imageIntegral, kltBox, detectFeatureValue);
+	int kltradioMaxIndex;
+	radioClassifier(muPositive, sigmaPositive, muNegative, sigmaNegative, detectFeatureValue, kltradioMax, kltradioMaxIndex);
+
+
+	//恢复hairr
+	resetFeatures(scalRatio);
+
+	return kltradioMax;
 }

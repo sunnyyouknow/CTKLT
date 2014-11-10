@@ -19,6 +19,8 @@ const int nMaxPoints = 200;
 const float fminFloat = 0.01;//
 const float fupdateRatio = 0.1;
 
+const float failedThreshold = -5.0f;
+
 extern const Scalar obColors[];
 
 class CompressiveKLTracker
@@ -66,6 +68,7 @@ private:
 	void radioClassifier(vector<float>& _muPos, vector<float>& _sigmaPos, vector<float>& _muNeg, vector<float>& _sigmaNeg,
 		Mat& _sampleFeatureValue, float& _radioMax, int& _radioMaxIndex);
 
+	int processFrame_ct(Mat& _frame);
 
 // variables for KLT
 public:
@@ -92,7 +95,7 @@ private:
 	float scaleRatio;
 public:
 	Rect box;
-	void processFrame(Mat& _frame);
+	int processFrame(Mat& _frame);
 	void init(Mat& _frame, Rect _objectBox);
 
 // for SFCT
@@ -102,4 +105,10 @@ private:
 
 	void setFeatures(float s);
 	void resetFeatures(float s);
+
+public:
+	int status;
+
+	void updateTracker(Mat& _frame, Rect _box);
+	float CompressiveKLTracker::classifyRect(Rect _rec);
 };
