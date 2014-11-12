@@ -22,6 +22,8 @@ const float fupdateRatio = 0.1;
 const float failedThreshold = -5.0f;
 
 extern const Scalar obColors[];
+extern const string obNames[];
+
 
 class CompressiveKLTracker
 {
@@ -30,6 +32,7 @@ public:
 	CompressiveKLTracker();
 	CompressiveKLTracker(int _id);
 	CompressiveKLTracker(int _id, Rect _box);
+	CompressiveKLTracker(int _id, float confidence,Rect _box);
 	~CompressiveKLTracker();
 
 
@@ -111,4 +114,6 @@ public:
 
 	void updateTracker(Mat& _frame, Rect _box);
 	float CompressiveKLTracker::classifyRect(Rect _rec);
+
+	float confidence;
 };

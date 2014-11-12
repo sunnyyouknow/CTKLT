@@ -17,6 +17,7 @@ using namespace std;
 
 CompressiveKLTracker::CompressiveKLTracker()
 {
+	id = -1;
 	featureMinNumRect = 2;
 	featureMaxNumRect = 4;	// number of rectangle from 2 to 4
 	featureNum = 100;	// Origin: 50 number of all weaker classifiers, i.e,feature pool
@@ -38,6 +39,7 @@ CompressiveKLTracker::CompressiveKLTracker()
 CompressiveKLTracker::CompressiveKLTracker(int _id)
 {
 	id = _id;
+	confidence = -1.f;
 
 	featureMinNumRect = 2;
 	featureMaxNumRect = 4;	// number of rectangle from 2 to 4
@@ -65,6 +67,8 @@ CompressiveKLTracker::CompressiveKLTracker(int _id, Rect _box)
 	box2 = _box;
 	box = _box;
 
+	confidence = -1.f;
+
 	featureMinNumRect = 2;
 	featureMaxNumRect = 4;	// number of rectangle from 2 to 4
 	featureNum = 100;	// Origin: 50 number of all weaker classifiers, i.e,feature pool
@@ -81,6 +85,35 @@ CompressiveKLTracker::CompressiveKLTracker(int _id, Rect _box)
 	scaleRatio = 1.0;
 	rFineSearchWindow = 10;
 }
+
+
+CompressiveKLTracker::CompressiveKLTracker(int _id,float _confidence, Rect _box)
+{
+	id = _id;
+	box0 = _box;
+	box1 = _box;
+	box2 = _box;
+	box = _box;
+
+	confidence = _confidence;
+
+	featureMinNumRect = 2;
+	featureMaxNumRect = 4;	// number of rectangle from 2 to 4
+	featureNum = 100;	// Origin: 50 number of all weaker classifiers, i.e,feature pool
+	rOuterPositive = 4;	// radical scope of positive samples
+	rSearchWindow = 25; // size of search window
+	muPositive = vector<float>(featureNum, 0.0f);
+	muNegative = vector<float>(featureNum, 0.0f);
+	sigmaPositive = vector<float>(featureNum, 1.0f);
+	sigmaNegative = vector<float>(featureNum, 1.0f);
+	learnRate = 0.85f;	// Learning rate parameter
+	kltstatus = 0;
+	ctstatus = 0;
+	status = 0;
+	scaleRatio = 1.0;
+	rFineSearchWindow = 10;
+}
+
 
 CompressiveKLTracker::~CompressiveKLTracker()
 {
@@ -455,6 +488,10 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 
 	//box = box2;
 
+
+
+
+
 	float sca = 1.0;
 	sca = float(box.width) / float(box0.width);
 	if (kltstatus == 1&&((sca - 1.0) > fminFloat || (sca - 1.0) < -fminFloat))
@@ -507,9 +544,8 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 
-
 	static int kltFailCount = 0;
-	if (kltradioMax < -300)
+	if ((kltradioMax<-200 + 1e-1&&kltradioMax<-200 - 1e-1))//-200  //TODO: Frame 453
 	{
 		kltFailCount++;
 	}
@@ -517,6 +553,7 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 	{
 		kltFailCount = 0;
 	}
+
 	if (kltFailCount>0)
 	{
 		kltstatus = (kltstatus == -1) ? -1 : 0;
@@ -526,7 +563,6 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 	ctstatus = 1;
-
 	static int ctFailCount = 0;
 	if (radioMax < failedThreshold)
 	{
@@ -544,9 +580,10 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 
-	if (kltstatus<0||kltradioMax<-200)
+
+	if (kltstatus<0 ||(kltradioMax<-200+1e-1&&kltradioMax<-200-1e-1)) 
 	{
-		return 0;
+		return 0; 
 	}
 
 
@@ -560,7 +597,8 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 		box1 = box0;
 		box2 = box0;
 	}
-	else if (kltstatus==1&&ctstatus==0&&ctFailCount>1)
+
+	else if (kltstatus == 1 && ctstatus == 0 && ctFrameCount>1)
 	{
 		cout << "-----------------------Update CT----------------------" << endl;
 		float sca = 1.0;
@@ -602,9 +640,10 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 	}
 	else
 	{
-		cout << "----------------------Track Success--------------------" << endl;
+		//cout << "----------------------Track Success--------------------" << endl;
 		box1 = box2;
 	}
+
 
 
     ctFrameCount++;
@@ -615,7 +654,6 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 	//------------------------------------------------ Sampling and Update CT and KLT-------------------------------------------
-
 
 
 #ifndef FCT
@@ -669,11 +707,22 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 	}
 
 
-	float kltsca = 1.0;
 
+	//------------------------------------------------- Updating the box and box0----------------------------------------------
+
+	box.width = (1 - fupdateRatio)*box.width + fupdateRatio*box2.width;
+	box.height = (1 - fupdateRatio)*box.height + fupdateRatio*box2.height;
+	float s1 = 0.5*(box.width - box2.width);
+	float s2 = 0.5*(box.height - box2.height);
+	box.x = round(box2.x - s1);
+	box.y = round(box2.y - s2);
+
+	//box = box2;
+
+
+	float kltsca = 1.0;
 	//-----------------------------------------------Classify the result of KLT----------------------------------------------
 	
-	box = box2;
 
 
 	float kltradioMax = 1;
@@ -704,17 +753,8 @@ int CompressiveKLTracker::processFrame(Mat& _frame)
 
 
 
-	////------------------------------------------------- Updating the box and box0----------------------------------------------
 
-	//box.width = (1 - fupdateRatio)*box.width + fupdateRatio*box2.width;
-	//box.height = (1 - fupdateRatio)*box.height + fupdateRatio*box2.height;
-	//float s1 = 0.5*(box.width - box2.width);
-	//float s2 = 0.5*(box.height - box2.height);
-	//box.x = round(box2.x - s1);
-	//box.y = round(box2.y - s2);
-
-
-	if (kltstatus <=0||kltradioMax < -200)
+	if (kltstatus <=0||kltradioMax < -500)
 	{
 		status = 0;
 		return 0;
